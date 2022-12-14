@@ -367,7 +367,7 @@ reliable.
 11. Click "OK" to close "Add a Script" dialog.
 12. Click "OK" to close "Startup Properties" dialog.
 
-#### Direct method (dispreferred)
+##### Direct method (dispreferred)
 
 This procedure is less reliable compared to the previous procedure. 
 
