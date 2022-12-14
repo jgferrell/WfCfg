@@ -301,7 +301,7 @@ this case, we'll be using [wfcfg.bat](./wfcfg.bat) which will pass all
 parameters to [wfcfg.py](./wfcfg.py).
 
 See the sections on [downloading WfCfg](#downloading-wfcfg) and [shared
-folder organization](#shared-folder-contents-and-organization)for
+folder organization](#shared-folder-contents-and-organization) for
 preliminary setup and related advice.
 
 #### Workflows configuration via Group Policy
@@ -316,7 +316,7 @@ itself as a startup script. This doesn't work well. Multiple calls to
 `wfcfg.bat` in the same GPO will result in the GPO calling `wfcfg.bat`
 again before the previous call terminates which results in unexpected
 behavior. Furthermore, there seems to be an issue with "quoted
-parameters" being passed and ultimately interpretted correctly.
+arguments" being passed and ultimately interpretted correctly.
 
 It's better to make calls from a GPO to `wfcfg.bat`
 [*indirectly*](#indirect-method-preferred) by making a single call
