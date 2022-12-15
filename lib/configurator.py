@@ -143,26 +143,4 @@ def local_printers_available(printers_sought: None | set[str] = None) -> set[str
             except OSError:
                 # no more printers
                 break
-
-    # with winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE) as hklm:
-        # key_path = r'SYSTEM\CurrentControlSet\Control\Print\Printers'
-        # with winreg.OpenKey(hklm, key_path) as printers:
-            # i = 0
-            # while True:
-                # try:
-                    # printer = winreg.EnumKey(printers, i)
-                    # # if we're looking for all printers, add this one
-                    # # to results
-                    # if printers_sought is None:
-                        # printers_found.add(printer)
-                    # # if we're looking for specific printers, check
-                    # # what we've found against that set
-                    # else:
-                        # if printer.lower() in printers_sought:
-                            # print("Found printer:", printer)
-                            # printers_found.add(printer)                        
-                    # i += 1
-                # except OSError:
-                    # # no more printers
-                    # break
     return printers_found
