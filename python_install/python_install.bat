@@ -1,16 +1,24 @@
 @echo off
-set PythonInstaller=%~1
-set PythonFilepath=%~2
+REM --- %RemoteInstaller% = full path to the server-shared installer
+set RemoteInstaller=%~2%~1
+
+REM --- %LocalPythonDir% = target installation directory
 set LocalPythonDir=%~3
+
+REM --- %TempDir% = local temporary directory for storing the installer
 set TempDir=%~4
-set Python=%LocalPythonDir%\python.exe
+
+REM --- %TempInstaller% = full path to local copy of installer (in %TempDir%)
+set TempInstaller=%~4\%~1
+
+REM --- %Python% = full path to Python executable (in %LocalPythonDir%)
+set Python=%~3\python.exe
 
 REM --- Install Python if it's not already installed
 if not exist "%Python%" (
-   set TempInstaller=%TempDir%\%PythonInstaller%
    if not exist "%TempInstaller%" (
       echo Copying installer to temp directory.
-      copy "%PythonFilepath%" "%TempDir%"
+      copy "%RemoteInstaller%" "%TempDir%"
    )
    echo Running installer from temp directory.
    call "%TempInstaller%" /quiet InstallAllUsers=1 TargetDir="%LocalPythonDir%" Shortcuts=0 Include_doc=0 Include_tcltk=0 LongPathsEnabled=1
