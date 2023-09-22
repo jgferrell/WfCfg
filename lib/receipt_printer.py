@@ -7,11 +7,45 @@
 """Classes used to update Sirsi Workflows receipt printer configuration
 options."""
 #:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-from .configurator import Configurator, local_printers_available
-from .path import preference_files
-#:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+from typing import NoReturn, Any, Set, Tuple, List, Union
+from .configurator import Configurator
+from .paper import Paper
+from .settings_group import SettingsGroup, CfgSetting
+NumType = Union[float, int]
+#::::::::::::::::::::::::::::::p:::::::::::::::::::::::::::::::::::::::
 
-class ReceiptFont():
+class ReceiptPaper(Paper):
+    def __init__(self) -> "ReceiptPaper":
+        super().__init__('peripherals.receipt.page.')
+        self.add_setting('width', float)
+        self.delete_setting('orientation')
+        self.delete_setting('paper_size')
+        
+        # correct for difference between 'screen paper' and 'receipt
+        # paper' margin key names
+        for m in ['top', 'right', 'bottom', 'left']:
+            self.override_key('margin_%s' % m, 'margin.%s' % m)
+
+        # correct for difference between 'screen paper' units and
+        # 'receipt paper' units key name
+        self.override_key('margin_unit', 'unit')
+
+    @property
+    def width(self) -> float:
+        """Returns the width of the receipt paper."""
+        return self.get_setting('width').value
+    @width.setter
+    def width(self, w: NumType) -> NoReturn:
+        """Sets the width of the receipt paper."""
+        self.get_setting('width').value = w
+                    
+
+class ReceiptFont(CfgSetting):
+    # Workflows stores receipt font style as the following integers:
+    REGULAR = 0
+    BOLD = 1
+    ITALIC = 2
+    
     def __init__(self) -> object:
         """An object to store font data. Defaults to 11pt Verdana Bold."""
         self._name='Verdana'
@@ -29,116 +63,102 @@ class ReceiptFont():
         """The typeface or name of the font."""
         return self._name
     @name.setter
-    def name(self, new_name: str) -> None:
+    def name(self, new_name: str) -> NoReturn:
         self._modified = True
         self._name = new_name
 
     @property
-    def size(self) -> str:
+    def size(self) -> int:
         """The size (in points) of the font."""
         return self._size
     @size.setter
-    def size(self, new_size: int) -> None:
+    def size(self, new_size: int) -> NoReturn:
         self._modified = True
-        self._size = str(new_size)
+        self._size = new_size
 
     @property
-    def style(self) -> str:
+    def style(self) -> int:
         """The style (regular, bold, or italic) of the font."""
         return self._style
     @style.setter
-    def style(self, new_style: str) -> None:
+    def style(self, new_style: str) -> NoReturn:
         available_styles = {
-            'regular' : '0',
-            'bold' : '1',
-            'italic' : '2'
+            'regular' : ReceiptFont.REGULAR,
+            'bold' : ReceiptFont.BOLD,
+            'italic' : ReceiptFont.ITALIC
         }
+        if new_style not in available_styles:
+            raise ValueError("Value '%s' is not a valid style. "
+                             "Valid styles are: " +\
+                             ', '.join([k for k in available_styles]))
         self._modified = True
         self._style = available_styles[new_style]
 
-    def make_regular(self) -> None:
+
+    def make_regular(self) -> NoReturn:
         """Sets the font to regular style."""
         self._modified = True
         self.style = 'regular'
 
-    def make_bold(self) -> None:
+    def make_bold(self) -> NoReturn:
         """Sets the font to bold style."""
         self._modified = True
         self.style = 'bold'
 
-    def make_italic(self) -> None:
+    def make_italic(self) -> NoReturn:
         """Sets the font to italic style."""
         self._modified = True
         self.style = 'italic'
 
+    @property
+    def value(self) -> str:
+        """Returns string representation in manner of Workflows
+        config files."""
+        return '|'.join([self.name, str(self.style), str(self.size)])
+    @value.setter
+    def value(self, value: Any) -> NoReturn:
+        raise NotImplementedError
 
-class ReceiptPrinter(Configurator):
-    def __init__(self, target_files: None | set[str] = None) -> object:
-        if target_files is None:
-            target_files = preference_files
-        super(ReceiptPrinter, self).__init__(target_files)
-        self.font = ReceiptFont()
+        
+class ReceiptPrinter(Configurator, SettingsGroup):
+    def __init__(self, config_files: Set[str]) -> "ReceiptPrinter":
+        Configurator.__init__(self, config_files)
+        SettingsGroup.__init__(self, 'peripherals.receipt.')
+        self.paper = ReceiptPaper()
 
+        self.add_setting('font', str)
+        self.override_setting('font', ReceiptFont())
+        self.add_setting('name', str)
+        self.add_setting('dot_matrix', str)
+        self.add_setting('enabled', str)
+
+    @property
+    def font(self) -> "ReceiptFont":
+        return self.get_setting('font')
+        
     @property
     def changes_staged(self) -> bool:
         """Boolean indicating if changes have been staged."""
-        return self._changes_staged or self.font.modified
-    
-    def add_from(self, *printer_names: str) -> None:
-        """
-        Provided an arbitrary number of printer names (as strings), checks
-        these possible printers against printers that have been installed
-        on the system. If one or more installed printer is found, one will
-        be chosen arbitrarily and an update will be staged for Workflows
-        to be configured to use the chosen printer as its receipt printer.
-        If no installed printers are found, Workflows is configured to not
-        use a receipt printer.
-        """
-        print('Adding receipt printer from:', printer_names)
-        possible_printers = set([printer for printer in printer_names])
-        installed_printers = local_printers_available(possible_printers)
-        if installed_printers:
-            print('Found receipt printers:', installed_printers)
-            set_receipt_printer(self, installed_printers.pop())
-        else:
-            print('Found NO receipt printer.')
-            remove_receipt_printer(self)
-            
-    def add(self, printer_name: str) -> None:
-        """Directly adds the provided printer as the receipt printer."""
-        set_receipt_printer(self, printer_name)
-    
-    def remove(self) -> None:
-        """See: remove_receipt_printer"""
-        remove_receipt_printer(self)
-        
-    def run(self, test_run: bool = False) -> None:
-        """Stages font changes iff font has been modified. Then runs as Configurator."""
-        if self.font.modified:
-            set_receipt_font(self, self.font)
-        super(ReceiptPrinter, self).run(test_run)
+        return super().changes_staged or super().modified
+                
+    def add(self, printer_name: str) -> NoReturn:
+        """Adds a receipt printer with the provided name and enables it."""
+        self.get_setting('name').value = printer_name
+        self.get_setting('dot_matrix').value = 'N'
+        self.enable()
 
-def set_receipt_printer(cfg: Configurator, printer_name: str) -> str:
-    """
-    Stages an update in the provided Configurator object for Workflows
-    to use the provided printer name as its receipt printer.
-    """
-    print('Setting receipt printer to "%s".' % printer_name)
-    cfg.update('peripherals.receipt.name', printer_name)
-    cfg.update('peripherals.receipt.dot_matrix', 'N')
-    cfg.update('peripherals.receipt.enabled', 'Y')
+    def enable(self) -> NoReturn:
+        """Workflows will attempt to use a receipt printer."""
+        self.get_setting('enabled').value = 'Y'
 
-def remove_receipt_printer(cfg: Configurator) -> None:
-    """
-    Stages an update in the provided Configurator object instructing
-    Workflows to use no receipt printer.
-    """
-    cfg.update('peripherals.receipt.enabled', 'N')
+    def disable(self) -> NoReturn:
+        """Workflows will not use a receipt printer."""
+        self.get_setting('enabled').value = 'N'
 
-def set_receipt_font(cfg: Configurator, font: ReceiptFont) -> None:
-    """
-    Stages an update in the provided Configurator object setting the font
-    used by the receipt printer to the one provided.
-    """
-    new_value = '|'.join([font.name, font.style, font.size])
-    cfg.update('peripherals.receipt.font', new_value)
+    def run(self, test_run: bool = False) -> NoReturn:
+        self.batch_update(self.settings)
+        super().run(test_run)
+
+    @property
+    def settings(self) -> List[Tuple[str, str]]:
+        return super().settings + self.paper.settings

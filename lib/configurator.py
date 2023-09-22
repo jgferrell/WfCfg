@@ -6,12 +6,11 @@
 #:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 """A class to update Sirsi Workflows configuration files."""
 #:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-from typing import Generator
-import os, winreg
+from typing import NoReturn, Any, Set, Tuple, List, Union, Generator
 #:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 class Configurator:
-    def __init__(self, config_files: set[str]) -> object:
+    def __init__(self, config_files: Set[str]) -> "Configurator":
         """
         Create a new Configurator object. Subject files are provided as
         a set of strings of filepaths.
@@ -26,7 +25,7 @@ class Configurator:
         """Boolean indicating if changes have been staged."""
         return self._changes_staged
 
-    def update(self, key: str, value: str) -> None:
+    def update(self, key: str, value: str) -> NoReturn:
         """
         Stages an update to a key in the preference files, replacing its
         current value with the provided value. If `key` doesn't exist in
@@ -38,14 +37,18 @@ class Configurator:
         self._update_items[key] = value
         self._changes_staged = True
 
-    def delete(self, key: str) -> None:
+    def batch_update(self, batch: List[Tuple[str, str]]) -> NoReturn:
+        for key, value in batch:
+            self.update(key, value)
+
+    def delete(self, key: str) -> NoReturn:
         """
         Slates a key in the preference files for deletion.
         """
         self._delete_items.add(key)
         self._changes_staged = True
-
-    def _updated_files(self) -> Generator[tuple[str, str], None, None]:
+                
+    def _updated_files(self) -> Generator[Tuple[str, str], None, None]:
         """
         Yields a (path, content) tuple for each subject file of the
         Configurator. The 'path' value contains the full path to the file,
@@ -55,42 +58,54 @@ class Configurator:
         for path in self._config_files:
             keys_to_update = set(self._update_items.keys())
             lines_to_delete = set()
+            buffer = []
             with open(path) as pref:
-                buffer = [self.processed_buffer_line(line) for line in pref]
+                for line in [_.strip() for _ in pref if _.strip()]:
+                    key, value = self.config_line_processor(line)
+                    buffer.append([key, value])
             # do the staged updates; record the line numbers to be deleted
-            for i, (key, _) in enumerate(buffer):
-                if key in self._delete_items:
-                    lines_to_delete.add(i)
-                if key in keys_to_update:
-                    buffer[i][1] = self._update_items[key]
-                    keys_to_update.remove(key)
+            if buffer:
+                for i, cfg in enumerate(buffer):
+                    key = cfg[0]
+                    if key in self._delete_items:
+                        lines_to_delete.add(i)
+                    if key in keys_to_update:
+                        buffer[i][1] = self._update_items[key]
+                        keys_to_update.remove(key)
             # delete the keys slated for deletion
-            i = 0
-            for line_num in sorted(list(lines_to_delete)):
-                del buffer[line_num - i]
-                i += 1
+            if buffer:
+                for i, line_num in enumerate(sorted(list(lines_to_delete))):
+                    del buffer[line_num - i]
+                    i += 1
             # append 'update' values that were not in file
             for new_item in keys_to_update:
                 value = self._update_items[new_item]
                 buffer.append((new_item, value))
             # reformat buffer and write to file
-            content = '\n'.join([self.formatted_config_item(key,val) \
+            content = '\n'.join([self.config_line_formatter(key,val) \
                                 for key, val in buffer])
             yield path, content
             
-    def processed_buffer_line(self, line: str) -> list[str]:
-        """Returns a two-item list, [key, item], based on provided configuration line."""
-        return line.strip().split('=')
+    def config_line_processor(self, line: str) -> List[str]:
+        """Returns a two-item list, [key, item], based on provided
+        configuration line."""
+        key, value = line.strip().split('=')
+        return [key, value]
             
-    def formatted_config_item(self, key: str, value: str) -> str:
-        """Return a configuration file item properly formatted for the configuration file."""
+    def config_line_formatter(self, key: str, value: str) -> str:
+        """Return a configuration file item properly formatted for the
+        configuration file."""
         return key + '=' + value
+
+    @property
+    def config_files(self):
+        """A set containing paths to configuration files affected by
+        this Configurator."""
+        return self._config_files
         
-    def run(self, test_run: bool = False) -> None:
-        """
-        Applies updates and deletions to preference files.
-        """
-        if not self._changes_staged:
+    def run(self, test_run: bool = False) -> NoReturn:
+        """Applies updates and deletions to preference files."""
+        if not self.changes_staged:
             print("No changes staged. Not executing run.")
             return None
         if self._update_items:
@@ -109,38 +124,4 @@ class Configurator:
                 continue
             with open(path, 'w') as fo:
                 fo.write(updated_file)
-
-
-def local_printers_available(printers_sought: None | set[str] = None) -> set[str]:
-    """
-    Returns a set of names of locally installed printers.
-
-    If a set of printer names is provided, returns the intersection of 
-    the provided set and names of locally installed printers (i.e., 
-    keys in HKML\SYSTEM\CurrentControlSet\Control\Print\Printers).
-    """
-    print("Looking for printers:", printers_sought)
-    printers_sought = set(map(str.lower, printers_sought))
-    printers_found = set()
-
-    key_path = r'SYSTEM\CurrentControlSet\Control\Print\Printers'
-    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as printers:
-        i = 0
-        while True:
-            try:
-                printer = winreg.EnumKey(printers, i)
-                # if we're looking for all printers, add this one
-                # to results
-                if printers_sought is None:
-                    printers_found.add(printer)
-                # if we're looking for specific printers, check
-                # what we've found against that set
-                else:
-                    if printer.lower() in printers_sought:
-                        print("Found printer:", printer)
-                        printers_found.add(printer)                        
-                i += 1
-            except OSError:
-                # no more printers
-                break
-    return printers_found
+        self._changes_staged = False
