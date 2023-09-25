@@ -22,5 +22,4 @@ else:
 # Run from command line with: python wfcfg.py
 if __name__ == '__main__':
     parser = cli.WfCfgParser(pref_files, font_files)
-    print('argv = %s' % str(argv))
     parser.run(argv[1:])
