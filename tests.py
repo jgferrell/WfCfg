@@ -5,7 +5,7 @@ from lib.receipt_printer import ReceiptFont, ReceiptPrinter, ReceiptPaper
 from lib.settings_group import CfgSetting, SettingsGroup
 from lib.font import FontConfigurator, Font, gui_components
 from lib.cli import WfCfgParser
-from lib.os import get_property_files
+from lib.os import get_property_files, LOCKFILE
 
 dummy_files = set([ 'testA.txt', 'testB.txt' ])
 default_settings = [('menu.burger.cheese', 'Y'),
@@ -15,6 +15,8 @@ def makeDummyFiles():
     # create temporary config files with dummy values
     lines = ['='.join(kv) for kv in default_settings]
     for f in dummy_files:
+        if os.path.exists(f + LOCKFILE):
+            os.remove(f + LOCKFILE)
         with open(f, 'w') as fo:
             fo.write('\n'.join(lines) + '\n')
 
@@ -537,6 +539,12 @@ class TestReceiptPrinter(TestConfiguratorClass, TestSettingsGroup):
         self.assertTrue(rp.changes_staged)
         self.assertTrue(rp.modified)
 
+        # changing the paper flags modified
+        rp = self.untouched_ReceiptPrinter()
+        rp.paper.margins = 0.25
+        self.assertTrue(rp.changes_staged)
+        self.assertTrue(rp.modified)
+        
         # enabling flags modified
         rp = self.untouched_ReceiptPrinter()
         rp.enable()
@@ -669,15 +677,46 @@ class TestCliParser(unittest.TestCase):
         # make sure files are updated correctly
         return checkFiles(self, Configurator_obj, keypath, value, cfgValParser)
 
+    def marginTester(self, configurator, keypath, margins, margin_args):
+        # uniform margins from single value
+        args = margin_args + ['0.25']
+        self.parser.run(args)
+        for margin in margins:
+            key = keypath + margin
+            self.checkFiles(configurator, key, '0.25')
+
+        # values assigned in order to correct margin
+        values = ['0.35', '0.45', '0.55', '0.65']
+        args = margin_args + values
+        self.parser.run(args)
+        for margin, value in zip(margins, values):
+            key = keypath + margin
+            self.checkFiles(configurator, key, value)
+
+        # fail with 3 margin values provided
+        args = margin_args + values[1:]
+        with self.assertRaises(ValueError):
+            self.parser.run(args)
+
+        # fail with 2 margin values provided
+        args = margin_args + values[2:]
+        with self.assertRaises(ValueError):
+            self.parser.run(args)
+
+        # fail with 5 margin values provided
+        args = margin_args + values + ['0.75']
+        with self.assertRaises(ValueError):
+            self.parser.run(args)
+
     def test_attributes(self):
         # make sure we have the right classes
         self.assertIsInstance(self.parser.main_cfg, Configurator)
         self.assertIsInstance(self.parser.font_cfg, FontConfigurator)
-        self.assertIsInstance(self.parser.rcpt_cfg, ReceiptPrinter)
+        self.assertIsInstance(self.parser.receipt, ReceiptPrinter)
         # make sure we have the right config files
         self.assertEqual(self.parser.main_cfg.config_files, self.pref_files)
         self.assertEqual(self.parser.font_cfg.config_files, self.font_files)
-        self.assertEqual(self.parser.rcpt_cfg.config_files, self.pref_files)        
+        self.assertEqual(self.parser.receipt.config_files, self.pref_files)        
 
     def test_main_crud_parser(self):
         # add two new keys
@@ -728,36 +767,11 @@ class TestCliParser(unittest.TestCase):
             self.checkFiles(self.parser.main_cfg, key, value.upper())
 
     def test_paper_parser_margins(self):
-        # uniform margins from single value
+        keypath = self.paper.keypath
         margins = ['margin_' + m for m in ['top','right','bottom','left']]
-        args = ['paper', '--margins', '0.25']
-        self.parser.run(args)
-        for margin in margins:
-            key = self.paper.keypath + margin
-            self.checkFiles(self.parser.main_cfg, key, '0.25')
-
-        # values assigned in order to correct margin
-        values = ['0.35', '0.45', '0.55', '0.65']
-        args = ['paper', '--margins'] + values
-        self.parser.run(args)
-        for margin, value in zip(margins, values):
-            key = self.paper.keypath + margin
-            self.checkFiles(self.parser.main_cfg, key, value)
-
-        # fail with 3 margin values provided
-        args = ['paper', '--margins'] + values[1:]
-        with self.assertRaises(ValueError):
-            self.parser.run(args)
-
-        # fail with 2 margin values provided
-        args = ['paper', '--margins'] + values[2:]
-        with self.assertRaises(ValueError):
-            self.parser.run(args)
-
-        # fail with 5 margin values provided
-        args = ['paper', '--margins'] + values + ['0.75']
-        with self.assertRaises(ValueError):
-            self.parser.run(args)
+        configurator = self.parser.main_cfg
+        margin_args = ['paper', '--margins']
+        self.marginTester(configurator, keypath, margins, margin_args)
         
     def test_font_parser(self):
         # test updating ALL gui components
@@ -781,6 +795,44 @@ class TestCliParser(unittest.TestCase):
                     expected_value = str(font)
                 self.checkFiles(self.parser.font_cfg, gc, expected_value)
 
+    def test_receipt_parser_paper(self):
+        keypath = self.parser.receipt.paper.keypath
+        margins = ['margin.' + m for m in ['top','right','bottom','left']]
+        configurator = self.parser.receipt
+        margin_args = ['receipt-printer', '--paper-margins']
+        self.marginTester(configurator, keypath, margins, margin_args)
 
+        args = ['receipt-printer', '--paper-width', '5.50']
+        self.parser.run(args)
+        key = keypath + 'width'
+        self.checkFiles(self.parser.receipt, key, 5.5, float)
+
+        for p_unit in paper_units:
+            args = ['receipt-printer', '--paper-units', p_unit]
+            self.parser.run(args)
+            key = keypath + 'unit'
+            self.checkFiles(self.parser.receipt, key, p_unit.upper())
+        
+    def __receipt_printer_remove(self):
+        args = ['receipt-printer', '--remove']
+        self.parser.run(args)
+        key = self.parser.receipt.keypath + 'enabled'
+        self.checkFiles(self.parser.receipt, key, 'N')
+
+    def __receipt_printer_add(self):
+        printer_name = 'ReceiptBoss 5000'
+        args = ['receipt-printer', '--add', printer_name]
+        self.parser.run(args)
+        key = self.parser.receipt.keypath + 'enabled'
+        self.checkFiles(self.parser.receipt, key, 'Y')
+        key = self.parser.receipt.keypath + 'name'
+        self.checkFiles(self.parser.receipt, key, printer_name)
+
+    def test_receipt_parser_add_remove(self):
+        self.__receipt_printer_remove()
+        self.__receipt_printer_add()
+        self.__receipt_printer_remove()
+
+        
 if __name__ == '__main__':
     unittest.main()
