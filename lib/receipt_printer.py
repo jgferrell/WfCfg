@@ -26,8 +26,9 @@ class ReceiptPaper(Paper):
         for m in ['top', 'right', 'bottom', 'left']:
             self.override_key('margin_%s' % m, 'margin.%s' % m)
 
-        # correct for difference between 'screen paper' units and
-        # 'receipt paper' units key name
+        # correct for difference between 'screen paper' units
+        # (declared as 'margin_unit') and 'receipt paper' units
+        # (declared as 'unit') key name
         self.override_key('margin_unit', 'unit')
 
     @property
@@ -140,6 +141,10 @@ class ReceiptPrinter(Configurator, SettingsGroup):
     def changes_staged(self) -> bool:
         """Boolean indicating if changes have been staged."""
         return super().changes_staged or super().modified
+
+    @property
+    def settings(self) -> List[Tuple[str, str]]:
+        return super().settings + self.paper.settings
                 
     def add(self, printer_name: str) -> NoReturn:
         """Adds a receipt printer with the provided name and enables it."""
@@ -158,7 +163,3 @@ class ReceiptPrinter(Configurator, SettingsGroup):
     def run(self, test_run: bool = False) -> NoReturn:
         self.batch_update(self.settings)
         super().run(test_run)
-
-    @property
-    def settings(self) -> List[Tuple[str, str]]:
-        return super().settings + self.paper.settings
