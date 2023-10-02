@@ -7,6 +7,7 @@
 """A class to update Sirsi Workflows configuration files."""
 #:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 from typing import NoReturn, Any, Set, Tuple, List, Union, Generator
+from .os import LockedFile
 #:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 class Configurator:
@@ -87,14 +88,14 @@ class Configurator:
             yield path, content
             
     def config_line_processor(self, line: str) -> List[str]:
-        """Returns a two-item list, [key, item], based on provided
-        configuration line."""
+        """Config line to key/value pair: Returns a two-item list,
+        [key, item], based on provided configuration line."""
         key, value = line.strip().split('=')
         return [key, value]
             
     def config_line_formatter(self, key: str, value: str) -> str:
-        """Return a configuration file item properly formatted for the
-        configuration file."""
+        """Key/value pair to config line: Return a configuration file
+        item properly formatted for the configuration file."""
         return key + '=' + value
 
     @property
@@ -102,7 +103,7 @@ class Configurator:
         """A set containing paths to configuration files affected by
         this Configurator."""
         return self._config_files
-        
+
     def run(self, test_run: bool = False) -> NoReturn:
         """Applies updates and deletions to preference files."""
         if not self.changes_staged:
@@ -122,6 +123,6 @@ class Configurator:
             if test_run:
                 # if we're in test mode, don't write staged changes
                 continue
-            with open(path, 'w') as fo:
+            with LockedFile(path, 'w') as fo:
                 fo.write(updated_file)
         self._changes_staged = False
