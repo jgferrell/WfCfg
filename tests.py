@@ -742,6 +742,20 @@ class TestCliParser(unittest.TestCase):
             cfg = fileDict(self.parser.main_cfg, f)
             self.assertFalse('bar' in cfg)
 
+    def test_tabbed_windows(self):
+        args = ['main', '--tabbed-windows']
+        self.parser.run(args)
+        cfg = self.parser.main_cfg
+        key = 'desktop.multiple_windows'
+        val = 'N'
+        self.checkFiles(cfg, key, val)
+        key = 'desktop.tabbed_windows'
+        val = 'Y'
+        self.checkFiles(cfg, key, val)
+        key = 'desktop.tabbed_window_bottom'
+        val = 'N'
+        self.checkFiles(cfg, key, val)        
+
     def test_paper_parser_units(self):
         # test paper units setting        
         key = self.paper.keypath + 'margin_unit'

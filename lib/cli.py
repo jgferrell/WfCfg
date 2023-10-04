@@ -36,11 +36,13 @@ class WfCfgParser:
         parser_mn = subparsers.add_parser('main', 
             help='Modify preferences of Workflows GUI.')
         parser_mn.add_argument('--update', nargs='+')
-        parser_mn.add_argument('--delete', nargs='+')    
+        parser_mn.add_argument('--delete', nargs='+')
         parser_mn.add_argument('--find-printer', nargs='+', 
             help='find a screen printer')
         parser_mn.add_argument('--add-printer', nargs=1, 
             help='add a screen printer')
+        parser_mn.add_argument('--tabbed-windows', action='store_true',
+            help='change desktop settings to use tabbed windows')
         parser_mn.set_defaults(func=self._proc_main)
 
         ##################################################################
@@ -127,6 +129,10 @@ class WfCfgParser:
                 pass
         if args.add_printer:
             self.main_cfg.update('peripherals.screen.printer', args.add_printer[0])
+        if args.tabbed_windows:
+            self.main_cfg.update('desktop.multiple_windows', 'N')
+            self.main_cfg.update('desktop.tabbed_windows', 'Y')
+            self.main_cfg.update('desktop.tabbed_window_bottom', 'N')
         self.main_cfg.run(args.test)
       
     def _proc_paper(self, args):
