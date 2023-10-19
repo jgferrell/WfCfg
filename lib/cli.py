@@ -130,7 +130,7 @@ class WfCfgParser:
         if args.add_printer:
             self.main_cfg.update('peripherals.screen.printer', args.add_printer[0])
         if args.tabbed_windows:
-            self.main_cfg.update('desktop.multiple_windows', 'N')
+            self.main_cfg.update('desktop.multiple_windows', 'Y')
             self.main_cfg.update('desktop.tabbed_windows', 'Y')
             self.main_cfg.update('desktop.tabbed_window_bottom', 'N')
         self.main_cfg.run(args.test)
